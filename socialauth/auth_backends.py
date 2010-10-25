@@ -1,14 +1,19 @@
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django.conf import settings
-import facebook
+from urlparse import urlparse
+from django.core.files import File
 
-import urllib
 from socialauth.lib import oauthtwitter2 as oauthtwitter
 from socialauth.models import OpenidProfile as UserAssociation, TwitterUserProfile, FacebookUserProfile, LinkedInUserProfile, AuthMeta
 from socialauth.lib.linkedin import *
 
+from emailconfirmation.models import EmailAddress
+from avatar.models import Avatar
+
 import random
+import urllib
+import facebook
 
 TWITTER_CONSUMER_KEY = getattr(settings, 'TWITTER_CONSUMER_KEY', '')
 TWITTER_CONSUMER_SECRET = getattr(settings, 'TWITTER_CONSUMER_SECRET', '')
@@ -24,6 +29,10 @@ LINKEDIN_CONSUMER_SECRET = getattr(settings, 'LINKEDIN_CONSUMER_SECRET', '')
 # OpenId setting map
 
 OPENID_AX_PROVIDER_MAP = getattr(settings, 'OPENID_AX_PROVIDER_MAP', {})
+
+def get_avatar_from_url(url):
+    content = urllib.urlretrieve(url)
+    return File(open(content[0]))
 
 class OpenIdBackend:
     def authenticate(self, openid_key, request, provider, user=None):
@@ -222,45 +231,67 @@ class FacebookBackend:
             params = {}
             params["client_id"] = FACEBOOK_APP_ID
             params["client_secret"] = FACEBOOK_SECRET_KEY
-            params["redirect_uri"] = reverse("socialauth_facebook_login_done")[1:] 
+            params["redirect_uri"] = request.build_absolute_uri(reverse("socialauth_facebook_login_done"))
             params["code"] = request.GET.get('code', '')
+            params['scope'] = 'email,publish_stream,read_stream'
 
             url = "https://graph.facebook.com/oauth/access_token?"+urllib.urlencode(params)
+
             from cgi import parse_qs
             userdata = urllib.urlopen(url).read()
             res_parse_qs = parse_qs(userdata)
+
             # Could be a bot query
             if not res_parse_qs.has_key('access_token'):
                 return None
-                
-            parse_data = res_parse_qs['access_token']
-            uid = parse_data['uid'][-1]
-            access_token = parse_data['access_token'][-1]
+
+            access_token = res_parse_qs['access_token'][-1]
+
+            graph = facebook.GraphAPI(access_token) 
+            fb_data = graph.get_object("me")
+            
+            if not fb_data:
+                return None
+            
+            uid = fb_data['id']
             
         try:
             fb_user = FacebookUserProfile.objects.get(facebook_uid=uid)
             return fb_user.user
 
         except FacebookUserProfile.DoesNotExist:
-            
-            # create new FacebookUserProfile
-            graph = facebook.GraphAPI(access_token) 
-            fb_data = graph.get_object("me")
-
-            if not fb_data:
-                return None
-
-            username = uid
+            username = 'FB_' + uid
             if not user:
-                user = User.objects.create(username=username)
-                user.first_name = fb_data['first_name']
-                user.last_name = fb_data['last_name']
+                user = User.objects.create(username=username,
+                                           email=fb_data['email'],
+                                           first_name=fb_data['first_name'],
+                                           last_name=fb_data['last_name']
+                                          )
                 user.save()
+                user.groups.add('1')
                 
-            fb_profile = FacebookUserProfile(facebook_uid=uid, user=user)
-            fb_profile.save()
+            profile = user.get_profile()
+            profile.name = fb_data['first_name'] + ' ' + fb_data['last_name']
+            profile.save()
+
+            file = get_avatar_from_url('http://graph.facebook.com/' \
+                                              + fb_data['id'] + \
+                                                '/picture?type=large')
+
+            avatar = Avatar(user=user,
+                            primary=True)
+            avatar.avatar.save(fb_data['id'] + '.jpg', file, save=True)
             
-            auth_meta = AuthMeta(user=user, provider='Facebook').save()
+            FacebookUserProfile(facebook_uid=uid,
+                                user=user,
+                                access_token=access_token).save()
+            
+            EmailAddress(user=user,
+                         email=user.email,
+                         verified=True,
+                         primary=True).save()
+            
+            AuthMeta(user=user, provider='Facebook').save()
                 
             return user
 

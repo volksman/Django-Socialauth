@@ -23,7 +23,7 @@ LINKEDIN_CONSUMER_KEY = getattr(settings, 'LINKEDIN_CONSUMER_KEY', '')
 LINKEDIN_CONSUMER_SECRET = getattr(settings, 'LINKEDIN_CONSUMER_SECRET', '')
 
 ADD_LOGIN_REDIRECT_URL = getattr(settings, 'ADD_LOGIN_REDIRECT_URL', '')
-LOGIN_REDIRECT_URL = getattr(settings, 'LOGIN_REDIRECT_URL', '')
+LOGIN_REDIRECT_URLNAME = getattr(settings, 'LOGIN_REDIRECT_URLNAME', '')
 LOGIN_URL = getattr(settings, 'LOGIN_URL', '')
 
 TWITTER_CONSUMER_KEY = getattr(settings, 'TWITTER_CONSUMER_KEY', '')
@@ -39,7 +39,7 @@ def del_dict_key(src_dict, key):
         del src_dict[key]
 
 def login_page(request):
-    return render_to_response('socialauth/login_page.html', {'next': request.GET.get('next', LOGIN_REDIRECT_URL)}, context_instance=RequestContext(request))
+    return HttpResponseRedirect(reverse('acct_login'))
 
 def linkedin_login(request):
     linkedin = LinkedIn(LINKEDIN_CONSUMER_KEY, LINKEDIN_CONSUMER_SECRET)
@@ -213,6 +213,7 @@ def facebook_login(request):
     params = {}
     params["client_id"] = FACEBOOK_APP_ID
     params["redirect_uri"] = request.build_absolute_uri(reverse("socialauth_facebook_login_done"))
+    params['scope'] = 'email,publish_stream,read_stream'
 
     url = "https://graph.facebook.com/oauth/authorize?"+urllib.urlencode(params)
 
@@ -236,7 +237,7 @@ def facebook_login_done(request):
     if request.GET.get('next'):
         return HttpResponseRedirect(request.GET.get('next'))
     else:
-        return HttpResponseRedirect(LOGIN_REDIRECT_URL)
+        return HttpResponseRedirect(reverse(LOGIN_REDIRECT_URLNAME))
 
 def openid_login_page(request):
     return render_to_response('openid/index.html', context_instance=RequestContext(request))

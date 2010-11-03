@@ -221,7 +221,7 @@ class TwitterBackend:
 class FacebookBackend:
     def authenticate(self, request, user=None):
         cookie = facebook.get_user_from_cookie(request.COOKIES, FACEBOOK_APP_ID, FACEBOOK_SECRET_KEY)
-
+        
         if cookie:
             uid = cookie['uid']
             access_token = cookie['access_token']
@@ -262,6 +262,17 @@ class FacebookBackend:
         except FacebookUserProfile.DoesNotExist:
             username = 'FB_' + uid
             if not user:
+                try:
+                    user = User.objects.get(email=fb_data['email'])
+                except User.DoesNotExist:
+                    user = False
+                    
+                try:
+                    email = EmailAddress(email=fb_data['email'])
+                except:
+                    pass
+                
+            if not user and not email:
                 user = User.objects.create(username=username,
                                            email=fb_data['email'],
                                            first_name=fb_data['first_name'],
@@ -270,27 +281,34 @@ class FacebookBackend:
                 user.save()
                 user.groups.add('1')
                 
-            profile = user.get_profile()
-            profile.name = fb_data['first_name'] + ' ' + fb_data['last_name']
-            profile.save()
-
-            file = get_avatar_from_url('http://graph.facebook.com/' \
-                                              + fb_data['id'] + \
-                                                '/picture?type=large')
-
-            avatar = Avatar(user=user,
-                            primary=True)
-            avatar.avatar.save(fb_data['id'] + '.jpg', file, save=True)
-            
-            FacebookUserProfile(facebook_uid=uid,
-                                user=user,
-                                access_token=access_token).save()
-            
-            EmailAddress(user=user,
+                profile = user.get_profile()
+                profile.name = fb_data['first_name'] + ' ' + fb_data['last_name']
+                profile.save()
+    
+                file = get_avatar_from_url('http://graph.facebook.com/' \
+                                                  + fb_data['id'] + \
+                                                    '/picture?type=large')
+    
+                avatar = Avatar(user=user,
+                                primary=True)
+                avatar.avatar.save(fb_data['id'] + '.jpg', file, save=True)
+                
+                EmailAddress(user=user,
                          email=user.email,
                          verified=True,
                          primary=True).save()
             
+            if email and not user:
+                user = email.user
+                if email.verified == False:
+                    email.verified = True
+                    email.primary = True
+                    email.save()
+            
+            FacebookUserProfile(facebook_uid=uid,
+                                user=user,
+                                access_token=access_token).save()
+
             AuthMeta(user=user, provider='Facebook').save()
                 
             return user

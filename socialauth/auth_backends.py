@@ -231,7 +231,9 @@ class FacebookBackend:
             params = {}
             params["client_id"] = FACEBOOK_APP_ID
             params["client_secret"] = FACEBOOK_SECRET_KEY
+
             params["redirect_uri"] = request.build_absolute_uri(reverse("socialauth_facebook_login_done"))
+
             params["code"] = request.GET.get('code', '')
             params['scope'] = 'email,publish_stream,read_stream'
 
@@ -239,6 +241,7 @@ class FacebookBackend:
 
             from cgi import parse_qs
             userdata = urllib.urlopen(url).read()
+
             res_parse_qs = parse_qs(userdata)
 
             # Could be a bot query
@@ -253,8 +256,7 @@ class FacebookBackend:
             if not fb_data:
                 return None
             
-            uid = fb_data['id']
-            
+            uid = fb_data['id']          
         try:
             fb_user = FacebookUserProfile.objects.get(facebook_uid=uid)
             return fb_user.user
@@ -270,7 +272,7 @@ class FacebookBackend:
                 try:
                     email = EmailAddress(email=fb_data['email'])
                 except:
-                    pass
+                    email = False
                 
             if not user and not email:
                 user = User.objects.create(username=username,

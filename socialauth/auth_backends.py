@@ -270,7 +270,7 @@ class FacebookBackend:
                     user = False
                     
                 try:
-                    email = EmailAddress(email=fb_data['email'])
+                    email = EmailAddress.objects.get(email=fb_data['email'])
                 except:
                     email = False
                 

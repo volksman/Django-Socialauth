@@ -216,10 +216,12 @@ def facebook_login(request):
     params['scope'] = 'email,publish_stream,read_stream'
 
     url = "https://graph.facebook.com/oauth/authorize?"+urllib.urlencode(params)
+    
+    response = HttpResponseRedirect(url)
     if request.GET.get('next'):
-        request.session['redirect'] = request.GET.get('next')
+        response.set_cookie('redirect', value=request.GET.get('next'))
         
-    return HttpResponseRedirect(url)
+    return response
 
 def facebook_login_done(request):
     user = authenticate(request=request)
@@ -236,8 +238,10 @@ def facebook_login_done(request):
     
     logging.debug("SOCIALAUTH: Successfully logged in with Facebook!")
     
-    if request.session.get('next', False):
-        return HttpResponseRedirect(request.session.get('next'))
+    if request.COOKIES.get('redirect', False):
+        response = HttpResponseRedirect(request.COOKIES.get('redirect'))
+        response.delete_cookie('redirect')
+        return response
     else:
         return HttpResponseRedirect(reverse(LOGIN_REDIRECT_URLNAME))
 

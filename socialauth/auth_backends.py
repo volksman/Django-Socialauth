@@ -300,13 +300,13 @@ class FacebookBackend:
                          verified=True,
                          primary=True).save()
             
-            if email and not user:
+            if email:
                 user = email.user
                 if email.verified == False:
                     email.verified = True
                     email.primary = True
                     email.save()
-            
+
             FacebookUserProfile(facebook_uid=uid,
                                 user=user,
                                 access_token=access_token).save()
